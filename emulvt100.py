@@ -87,9 +87,9 @@ class TerminalEmulator:
                 self.serial_conn = serial.Serial(
                     self.port_var.get(),
                     baudrate=self.config["baudrate"],
-                    bytesize=serial.EIGHTBITS,
-                    parity=serial.PARITY_NONE,
-                    stopbits=serial.STOPBITS_ONE,
+                    bytesize=self.config["bytesize"],
+                    parity=self.config["parity"],
+                    stopbits=self.config["stopbits"],
                     timeout=1
                 )
                 self.serial_conn.setDTR(self.config["dtr"])  # Activation de DTR
@@ -101,7 +101,7 @@ class TerminalEmulator:
 
     def read_serial(self):
         if self.serial_conn and self.serial_conn.is_open:
-            data = self.serial_conn.read(1024).decode(errors="ignore")
+            data = self.serial_conn.read(self.serial_conn.in_waiting()).decode(errors="ignore")
             if data:
                 self.text_area.insert(tk.END, data)
                 self.text_area.see(tk.END)
