@@ -1,0 +1,8 @@
+{
+    "baudrate": 9600,
+    "parity": "N",
+    "bytesize": 8,
+    "stopbits": 1,
+    "dtr": true,
+    "last_port": "COM10"
+}
