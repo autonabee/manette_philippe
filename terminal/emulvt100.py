@@ -4,6 +4,7 @@ import tkinter as tk
 from tkinter import ttk
 import serial
 import serial.tools.list_ports
+import threading
 
 CONFIG_FILE = os.path.join(os.path.dirname(__file__), "emul.json")
 
@@ -63,9 +64,10 @@ class TerminalEmulator:
         self.connect_button.pack(pady=5)
 
         # Chargement des paramètres de configuration
-        init_serial_config()  # Vérifier et initialiser le fichier JSON si nécessaire
+        init_serial_config()
         self.config = load_config()
         self.serial_conn = None
+        self.read_thread = None
         self.port_var.set(self.config["last_port"])
 
     def get_serial_ports(self):
@@ -90,22 +92,31 @@ class TerminalEmulator:
                     bytesize=self.config["bytesize"],
                     parity=self.config["parity"],
                     stopbits=self.config["stopbits"],
-                    timeout=1
+                    timeout=0.1  # Short timeout for non-blocking read
                 )
                 self.serial_conn.setDTR(self.config["dtr"])  # Activation de DTR
                 self.connect_button.config(text="Disconnect")
-                self.root.after(100, self.read_serial)
-                self.save_config()  # Sauvegarde du dernier port utilisé
+                self.save_config()
+
+                # Start the background reading thread
+                self.read_thread = threading.Thread(target=self.read_serial, daemon=True)
+                self.read_thread.start()
             except Exception as e:
                 print(f"Erreur de connexion: {e}")
 
     def read_serial(self):
-        if self.serial_conn and self.serial_conn.is_open:
-            data = self.serial_conn.read(self.serial_conn.in_waiting()).decode(errors="ignore")
-            if data:
-                self.text_area.insert(tk.END, data)
-                self.text_area.see(tk.END)
-            self.root.after(100, self.read_serial)
+        while self.serial_conn and self.serial_conn.is_open:
+            try:
+                data = self.serial_conn.read(self.serial_conn.in_waiting or 1).decode(errors="ignore")
+                if data:
+                    self.root.after(0, self.display_data, data)
+            except Exception as e:
+                print("Read error:", e)
+                break
+
+    def display_data(self, data):
+        self.text_area.insert(tk.END, data)
+        self.text_area.see(tk.END)
 
     def send_data(self, event):
         if self.serial_conn and self.serial_conn.is_open:
