@@ -1,0 +1,2 @@
+- transférer sur github autonabee
+- liste les cas de test (Wandrille)
