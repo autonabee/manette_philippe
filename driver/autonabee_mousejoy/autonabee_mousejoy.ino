@@ -43,7 +43,7 @@ const int ADR_SPEED = 8;
 const int ADR_LOGSPEED = 12;
 const int ADR_LOGW = 16;
 
-
+// Defaults
 const int DEFAULT_OFFSET = 1024/2;
 const int DEFAULT_DEADZONE = 50;
 const int DEFAULT_MOVEFLAG = 0;
@@ -51,6 +51,7 @@ const float DEFAULT_SPEED = 8.0;
 const float DEFAULT_LOGSPEED = 30.0;
 const float DEFAULT_LOGW = 7.0;
 
+// variable used in the program, loaded from the eeprom.
 int dx_ofs = 0;
 int dy_ofs = 0;
 int deadzone = 0;
@@ -60,164 +61,9 @@ float logspeed = 0;
 float logw = 0;
 
 
-void load_values_from_EEPROM() {
-  EEPROM.get(ADR_DX_OFS, dx_ofs);
-  EEPROM.get(ADR_DY_OFS, dy_ofs);
-  EEPROM.get(ADR_DEADZONE, deadzone);
-  EEPROM.get(ADR_MOVEFLAG, moveflag);
-  EEPROM.get(ADR_SPEED, speed);
-  EEPROM.get(ADR_LOGSPEED, logspeed);
-  EEPROM.get(ADR_LOGW, logw);
-}
-
-void write_defaults_to_EEPROM() {
-  EEPROM.put(ADR_DX_OFS, DEFAULT_OFFSET);
-  EEPROM.put(ADR_DY_OFS, DEFAULT_OFFSET);
-  EEPROM.put(ADR_DEADZONE, DEFAULT_DEADZONE);
-  EEPROM.put(ADR_MOVEFLAG, DEFAULT_MOVEFLAG);
-  EEPROM.put(ADR_SPEED, DEFAULT_SPEED);
-  EEPROM.put(ADR_LOGSPEED, DEFAULT_LOGSPEED);
-  EEPROM.put(ADR_LOGW, DEFAULT_LOGW);
-  load_values_from_EEPROM();
-  Serial.println("RESET TO DEFAULTS SETTINGS");
-}
-
-void calibrate() {
-  EEPROM.put(ADR_DX_OFS, analogRead(A1));
-  EEPROM.put(ADR_DY_OFS, analogRead(A0));
-
-  Serial.print("Calibrated with ");
-  Serial.print(analogRead(A1));
-  Serial.print("-");
-  Serial.println(analogRead(A0));
-  load_values_from_EEPROM();
-}
-
-void print_tick(String name, String s) {
-      Serial.print(name);
-      Serial.print(": '");
-      Serial.print(s);
-      Serial.println("'");
-}
-
-const int iter_size = 5;
-const int adr_iter[] = {
-  ADR_DEADZONE,
-  ADR_MOVEFLAG,
-  ADR_SPEED,
-  ADR_LOGSPEED,
-  ADR_LOGW,
-};
-
-const String commands_iter[] = {
-  "DEADZONE",
-  "MOVEFLAG",
-  "SPEED",
-  "LOGSPEED",
-  "LOGW",
-};
-
-const bool is_int_iter[] = {
-  true,
-  true,
-  false,
-  false,
-  false,
-};
-
-// Parses and handles commands.
-void handle_serial_communication() {
-  while (Serial.available() > 0) {
-    String command = Serial.readString();
-    //Serial.print("received: ");
-    //Serial.println(command);
-    
-    if (command.indexOf(CALIBRATE) != -1) {
-        calibrate();
-    }
-    else if (command.indexOf("DEFAULTS") != -1) {
-      write_defaults_to_EEPROM();
-    }
-    else {
-      int space = command.indexOf(" ");
-      if (space == -1) {
-          Serial.print("Command invalid: ");
-          Serial.println(command);
-      }
-      String set_part = command.substring(0, space);
-      String rest = command.substring(space + 1); // we skip the space itself
-
-      if (!set_part.equals("SET")) {
-          Serial.print("EXPECTED SET, FOUND: ");
-          Serial.println(set_part);
-          continue;
-      }
-
-      space = rest.indexOf(" ");
-      if (space == -1) {
-          Serial.println("Expected VARIABLE VALUE");
-          Serial.print("received: ");
-          Serial.println(command);
-          continue;
-      }
-      
-      String variable = rest.substring(0, space);
-      String value = rest.substring(space + 1);
-      
-      int int_value = value.toInt();
-      float float_value = value.toFloat();
-      
-      if (int_value == 0) {
-        Serial.println("Value may be invalid: using 0.");
-        Serial.println(String("[") + value + String("]"));
-      } 
-      if (float_value == 0.0) {
-        Serial.println("Value may be invalid: using 0.0.");
-        Serial.println(String("[") + value + String("]"));
-      }
-
-      bool matched = false;
-      for (int i = 0; i < iter_size; i++) {
-        int addr = adr_iter[i];
-        String command = commands_iter[i];
-        bool is_int = is_int_iter[i];
-        if (variable.equals(command)) {
-          Serial.print("Set ");
-          Serial.print(command);
-          Serial.print(" to ");
-
-          if (is_int) {
-            EEPROM.put(addr, int_value);
-            Serial.println(int_value);
-          }
-          else {
-            EEPROM.put(addr, float_value);
-            Serial.println(float_value);
-          }
-          matched = true;
-          load_values_from_EEPROM();
-          break;
-        }
-      }
-      if (!matched) {
-        Serial.print("Expected ");
-        for (int i = 0; i < iter_size ;i++) {
-          if (i != 0) {Serial.print("or ");}
-          Serial.print(commands_iter[i]);
-        }
-        Serial.print("received: ");
-        Serial.println(variable);
-      }
-    }
-  }
-}
-
-
-
+// related to handling of switches and toggles
 int all_signals_length = 4;
 int all_signals[] = { A2, A3, A4, A5 }; // used by the switches
-unsigned long buttons_debounce[] = {0, 0, 0, 0}; // used to store the debounce timer
-const unsigned long debounce_delay = 300; // in milliseconds
 
 int button_lengths = 2;
 int button_signals[] = {A2, A3};
@@ -238,13 +84,23 @@ int switches_id[] = {
 const int A_LED_SCROLL = 6;
 const int A_LED_SHIFT = 7;
 
+
+// debouncing variables
+unsigned long print_debounce = 0;
+const unsigned long print_debounce_delay = 1000;
+unsigned long mouse_report_debounce = 0;
+unsigned long mouse_report_debounce_delay = 20;
+unsigned long scroll_report_debounce = 0;
+unsigned long buttons_debounce[] = {0, 0, 0, 0}; // used to store the debounce timer
+const unsigned long debounce_delay = 300; // in milliseconds
+
+
 void setup() {
   load_values_from_EEPROM();
   long max_delay = 2000;
   while (!Serial) {
     if (millis() > max_delay) {break;}
   }
-
 
   print_tick("X offset", String(dx_ofs));
   print_tick("Y offset", String(dy_ofs));
@@ -269,10 +125,6 @@ void setup() {
   Keyboard.begin();
 }
 
-unsigned long print_debounce = 0;
-unsigned long print_debounce_delay = 1000;
-unsigned long mouse_report_debounce = 0;
-unsigned long mouse_report_debounce_delay = 20;
 
 void loop() {
   handle_serial_communication();
@@ -354,60 +206,204 @@ void loop() {
     
   }
 
-  if (mouse_report_debounce < millis()) {
-    mouse_report_debounce = millis() + mouse_report_debounce_delay;
+  
 
-    if (scroll_mode)  {
-      if (moveflag == 0) {
+  if (scroll_mode)  {
+    if (moveflag == 0) {
+      if (mouse_report_debounce < millis()) {
+        mouse_report_debounce = millis() + mouse_report_debounce_delay;
         Mouse.move(
           dx,
           dy
-        );
+        );          
       }
-      else {
+    }
+    else {
+      if (mouse_report_debounce < millis()) {
+        mouse_report_debounce = millis() + mouse_report_debounce_delay;
         Mouse.move(
           logspeed * signOf(dx) * (exp(abs(float(dx) * logw / 100.0)) - 1.0 ),
           logspeed * signOf(dy) * (exp(abs(float(dy) * logw / 100.0)) - 1.0 )
         );
-
       }
-    }    
-    else {
+    }
+  }    
+  else {
+    if (scroll_report_debounce < millis()) {
+      scroll_report_debounce = millis() + 100;
       Mouse.move(0,0, signOf(dy) * 2);
-      delay(100);
     }
   }
 }
 
 
+// parsing related
+const int iter_size = 5;
+const int adr_iter[] = {
+  ADR_DEADZONE,
+  ADR_MOVEFLAG,
+  ADR_SPEED,
+  ADR_LOGSPEED,
+  ADR_LOGW,
+};
+
+const String commands_iter[] = {
+  "DEADZONE",
+  "MOVEFLAG",
+  "SPEED",
+  "LOGSPEED",
+  "LOGW",
+};
+
+const bool is_int_iter[] = {
+  true,
+  true,
+  false,
+  false,
+  false,
+};
+
+
+// Parses and handles commands.
+void handle_serial_communication() {
+  while (Serial.available() > 0) {
+    String command = Serial.readString();
+    
+    if (command.indexOf(CALIBRATE) != -1) {
+        calibrate();
+    }
+    else if (command.indexOf("DEFAULTS") != -1) {
+      write_defaults_to_EEPROM();
+    }
+    else {
+      int space = command.indexOf(" ");
+      if (space == -1) {
+          Serial.print("Command invalid: ");
+          Serial.println(command);
+      }
+      String set_part = command.substring(0, space);
+      String rest = command.substring(space + 1); // we skip the space itself
+
+      if (!set_part.equals("SET")) {
+          Serial.print("EXPECTED SET, FOUND: ");
+          Serial.println(set_part);
+          continue;
+      }
+
+      space = rest.indexOf(" ");
+      if (space == -1) {
+          Serial.println("Expected VARIABLE VALUE");
+          Serial.print("received: ");
+          Serial.println(command);
+          continue;
+      }
+      
+      String variable = rest.substring(0, space);
+      String value = rest.substring(space + 1);
+      
+      int int_value = value.toInt();
+      float float_value = value.toFloat();
+      
+      if (int_value == 0) {
+        Serial.println("Value may be invalid: using 0.");
+        Serial.println(String("[") + value + String("]"));
+      } 
+      if (float_value == 0.0) {
+        Serial.println("Value may be invalid: using 0.0.");
+        Serial.println(String("[") + value + String("]"));
+      }
+
+      bool matched = false;
+      for (int i = 0; i < iter_size; i++) {
+        int addr = adr_iter[i];
+        String command = commands_iter[i];
+        bool is_int = is_int_iter[i];
+        if (variable.equals(command)) {
+          Serial.print("Set ");
+          Serial.print(command);
+          Serial.print(" to ");
+
+          if (is_int) {
+            EEPROM.put(addr, int_value);
+            Serial.println(int_value);
+          }
+          else {
+            EEPROM.put(addr, float_value);
+            Serial.println(float_value);
+          }
+          matched = true;
+          load_values_from_EEPROM();
+          break;
+        }
+      }
+      if (!matched) {
+        Serial.print("Expected ");
+        for (int i = 0; i < iter_size ;i++) {
+          if (i != 0) {Serial.print("or ");}
+          Serial.print(commands_iter[i]);
+        }
+        Serial.print("received: ");
+        Serial.println(variable);
+      }
+    }
+  }
+}
+
+// expects a value between 0-1023
+// necessary because Mouse.move requires char as input.
 char get_mouse_dz(int value, int offset, int deadzone, bool dz_dead, float speed) {
-  //Serial.print("read: ");
-  //Serial.println(value);
   float normalized = (float)(value - offset);
-  //Serial.print("minus offset: ");
-  //Serial.println("normalized");
   
   if (abs(normalized ) <= (float)deadzone ) {normalized = 0.0; dz_dead = true;}
   normalized *= speed / 1024.0;
- // Serial.print("time speed: ");
-  //Serial.println(normalized);
   
   int max_value = pow(2, sizeof(char) * 7);
-  //Serial.print("max value");
-  //Serial.println(max_value);
   
   if (normalized > max_value) { normalized =  max_value; }
   if (normalized <  - max_value) { normalized = - max_value; }
-  //Serial.print("after clamping: ");
-  //Serial.println(normalized);
-
-  //Serial.print("after cast: ");
-  //Serial.println( (long)(char)normalized);
   
   return (char)normalized;
 }
 
+void calibrate() {
+  EEPROM.put(ADR_DX_OFS, analogRead(A1));
+  EEPROM.put(ADR_DY_OFS, analogRead(A0));
 
+  Serial.print("Calibrated with ");
+  Serial.print(analogRead(A1));
+  Serial.print("-");
+  Serial.println(analogRead(A0));
+  load_values_from_EEPROM();
+}
+
+void load_values_from_EEPROM() {
+  EEPROM.get(ADR_DX_OFS, dx_ofs);
+  EEPROM.get(ADR_DY_OFS, dy_ofs);
+  EEPROM.get(ADR_DEADZONE, deadzone);
+  EEPROM.get(ADR_MOVEFLAG, moveflag);
+  EEPROM.get(ADR_SPEED, speed);
+  EEPROM.get(ADR_LOGSPEED, logspeed);
+  EEPROM.get(ADR_LOGW, logw);
+}
+
+void write_defaults_to_EEPROM() {
+  EEPROM.put(ADR_DX_OFS, DEFAULT_OFFSET);
+  EEPROM.put(ADR_DY_OFS, DEFAULT_OFFSET);
+  EEPROM.put(ADR_DEADZONE, DEFAULT_DEADZONE);
+  EEPROM.put(ADR_MOVEFLAG, DEFAULT_MOVEFLAG);
+  EEPROM.put(ADR_SPEED, DEFAULT_SPEED);
+  EEPROM.put(ADR_LOGSPEED, DEFAULT_LOGSPEED);
+  EEPROM.put(ADR_LOGW, DEFAULT_LOGW);
+  load_values_from_EEPROM();
+  Serial.println("RESET TO DEFAULTS SETTINGS");
+}
+
+void print_tick(String name, String s) {
+  Serial.print(name);
+  Serial.print(": '");
+  Serial.print(s);
+  Serial.println("'");
+}
 
 int signOf(int i) {
   if (i < 0) { return -1; }
