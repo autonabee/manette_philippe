@@ -18,7 +18,9 @@ EXPECTED COMMANDS:
   - float SPEED : used if MOVEMOD = 0, determines the speed of the mouse. SPEED * analog signal from joystick
   - float LOGSPEED: used if MOVEMOD = 1, LOGSPEED * signOf(signal) * log10(1 + abs(signal)* LOGW)
   - float LOGW: used if MOVEMOD = 1, see LOGSPEED
-
+  scroll delay is used instead of scroll speed for technical reasons. it's formula is MINDELAYSCROLL + SCROLLOFFSET/1+SCROLLSPEED*signal
+  - float MINDELAYSCROLL, the minimum delay between two polls of scroll.
+  - float SCROLLOFFSET, the maximum additional scroll, see scroll.
 
 EEPROM MEMORY
 0 int DX OFFSET
@@ -28,6 +30,9 @@ EEPROM MEMORY
 8 float SPEED
 12 float LOGSPEED
 16 float LOGW
+20 float MINDELAY
+24 float SCROLLOFFSET
+28 float SCROLLSPEED
 
 */
 
@@ -37,11 +42,13 @@ const int ADR_DX_OFS = 0;
 const int ADR_DY_OFS = 2;
 const int ADR_DEADZONE = 4;
 const int ADR_MOVEFLAG = 6;
-
 // floats
 const int ADR_SPEED = 8;
 const int ADR_LOGSPEED = 12;
 const int ADR_LOGW = 16;
+const float ADR_MINDELAY = 20;
+const float ADR_SCROLLOFFSET = 24 ;
+const float ADR_SCROLLSPEED = 28;
 
 // Defaults
 const int DEFAULT_OFFSET = 1024/2;
@@ -50,6 +57,9 @@ const int DEFAULT_MOVEFLAG = 0;
 const float DEFAULT_SPEED = 8.0;
 const float DEFAULT_LOGSPEED = 30.0;
 const float DEFAULT_LOGW = 7.0;
+const float DEFAULT_MINDELAY = 20;
+const float DEFAULT_SCROLLOFFSET = 300 ;
+const float DEFAULT_SCROLLSPEED = 1.0/1054*10;
 
 // variable used in the program, loaded from the eeprom.
 int dx_ofs = 0;
@@ -59,7 +69,9 @@ int moveflag = 0;
 float speed = 0;
 float logspeed = 0;
 float logw = 0;
-
+float min_delay_scroll = 0;
+float scroll_off = 0;
+float scroll_speed = 0;
 
 // related to handling of switches and toggles
 int all_signals_length = 4;
@@ -231,11 +243,14 @@ void loop() {
   else {
     if (scroll_report_debounce < millis()) {
       scroll_report_debounce = millis() + 100;
-      Mouse.move(0,0, signOf(dy) * 2);
+      
+      char dz = get_mouse_dz(analogRead(A0), 0, deadzone, true, scroll_speed);
+      float scroll_delay = min_delay_scroll + scroll_off/1.0+dz;
+      scroll_report_debounce = millis() + scroll_delay;
+      Mouse.move(0,0, signOf(dy));
     }
   }
 }
-
 
 // parsing related
 const int iter_size = 5;
@@ -245,6 +260,9 @@ const int adr_iter[] = {
   ADR_SPEED,
   ADR_LOGSPEED,
   ADR_LOGW,
+  ADR_MINDELAY,
+  ADR_SCROLLOFFSET,
+  ADR_SCROLLSPEED,
 };
 
 const String commands_iter[] = {
@@ -253,6 +271,9 @@ const String commands_iter[] = {
   "SPEED",
   "LOGSPEED",
   "LOGW",
+  "MINDELAY",
+  "SCROLLOFFSET",
+  "SCROLLSPEED"
 };
 
 const bool is_int_iter[] = {
@@ -261,6 +282,9 @@ const bool is_int_iter[] = {
   false,
   false,
   false,
+  false,
+  false,
+  false
 };
 
 
@@ -384,6 +408,9 @@ void load_values_from_EEPROM() {
   EEPROM.get(ADR_SPEED, speed);
   EEPROM.get(ADR_LOGSPEED, logspeed);
   EEPROM.get(ADR_LOGW, logw);
+  EEPROM.get(ADR_MINDELAY, min_delay_scroll);
+  EEPROM.get(ADR_SCROLLOFFSET, scroll_off);
+  EEPROM.get(ADR_SCROLLSPEED, scroll_speed);
 }
 
 void write_defaults_to_EEPROM() {
@@ -394,6 +421,10 @@ void write_defaults_to_EEPROM() {
   EEPROM.put(ADR_SPEED, DEFAULT_SPEED);
   EEPROM.put(ADR_LOGSPEED, DEFAULT_LOGSPEED);
   EEPROM.put(ADR_LOGW, DEFAULT_LOGW);
+  EEPROM.put(ADR_MINDELAY, DEFAULT_MINDELAY);
+  EEPROM.put(ADR_SCROLLOFFSET, DEFAULT_SCROLLOFFSET);
+  EEPROM.put(ADR_SCROLLSPEED, DEFAULT_SCROLLSPEED);
+
   load_values_from_EEPROM();
   Serial.println("RESET TO DEFAULTS SETTINGS");
 }
