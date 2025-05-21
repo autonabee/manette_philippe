@@ -48,8 +48,8 @@ const int DEFAULT_OFFSET = 1024/2;
 const int DEFAULT_DEADZONE = 50;
 const int DEFAULT_MOVEFLAG = 0;
 const float DEFAULT_SPEED = 8.0;
-const float DEFAULT_LOGSPEED = 1.0;
-const float DEFAULT_LOGW = 1024*9;
+const float DEFAULT_LOGSPEED = 30.0;
+const float DEFAULT_LOGW = 7.0;
 
 int dx_ofs = 0;
 int dy_ofs = 0;
@@ -158,6 +158,7 @@ void handle_serial_communication() {
           Serial.println("Expected VARIABLE VALUE");
           Serial.print("received: ");
           Serial.println(command);
+          continue;
       }
       
       String variable = rest.substring(0, space);
@@ -168,8 +169,11 @@ void handle_serial_communication() {
       
       if (int_value == 0) {
         Serial.println("Value may be invalid: using 0.");
-      } else if (float_value == 0.0) {
-        Serial.println("Value may be invalid: using 0.");
+        Serial.println(String("[") + value + String("]"));
+      } 
+      if (float_value == 0.0) {
+        Serial.println("Value may be invalid: using 0.0.");
+        Serial.println(String("[") + value + String("]"));
       }
 
       bool matched = false;
@@ -212,12 +216,12 @@ void handle_serial_communication() {
 
 int all_signals_length = 4;
 int all_signals[] = { A2, A3, A4, A5 }; // used by the switches
-int buttons_debounce[] = {0, 0, 0, 0}; // used to store the debounce timer
-const int debounce_delay = 300; // in milliseconds
+unsigned long buttons_debounce[] = {0, 0, 0, 0}; // used to store the debounce timer
+const unsigned long debounce_delay = 300; // in milliseconds
 
 int button_lengths = 2;
 int button_signals[] = {A2, A3};
-bool button_pressed[] = {false, false};
+bool button_pressed[] = {true, true};
 int buttons_id[] = {MOUSE_LEFT, MOUSE_RIGHT};
 
 int switches_lengths = 2;
@@ -236,11 +240,18 @@ const int A_LED_SHIFT = 7;
 
 void setup() {
   load_values_from_EEPROM();
-  while (!Serial) {}
+  long max_delay = 2000;
+  while (!Serial) {
+    if (millis() > max_delay) {break;}
+  }
+
+
   print_tick("X offset", String(dx_ofs));
   print_tick("Y offset", String(dy_ofs));
   print_tick("Speed", String(speed));
   print_tick("Deadzone", String(deadzone));
+  print_tick("Logw", String(logw));
+  print_tick("Logspeed", String(logspeed));
   print_tick("MoveFlag", String(moveflag));
 
   // we init all the inputs.
@@ -258,8 +269,11 @@ void setup() {
   Keyboard.begin();
 }
 
-int print_debounce = 0;
-int mouse_report_debounce = 0;
+unsigned long print_debounce = 0;
+unsigned long print_debounce_delay = 1000;
+unsigned long mouse_report_debounce = 0;
+unsigned long mouse_report_debounce_delay = 20;
+
 void loop() {
   handle_serial_communication();
   
@@ -293,12 +307,10 @@ void loop() {
         if (switches_id[i] == SwitchScroll) {
           scroll_mode = switches_toggled[i];
           if (!switches_toggled[i]) {
-            Keyboard.press(KEY_LEFT_SHIFT);
             digitalWrite(A_LED_SCROLL, HIGH);
             Serial.println("activate switch scroll");
           }
           else { 
-            Keyboard.release(KEY_LEFT_SHIFT);
             digitalWrite(A_LED_SCROLL, LOW);
             Serial.println("deactivate switch scroll");
           }
@@ -318,56 +330,92 @@ void loop() {
       }
   }
 
-  float dx = -(analogRead(A1) - dx_ofs) ;
-  float dy = -(analogRead(A0) - dy_ofs) ;
-  if (abs(dx) <= deadzone ) {dx = 0.0;}
-  if (abs(dy) <= deadzone ) {dy = 0.0;}
+
+  bool dx_dead = false;
+  bool dy_dead = false;
+  char dx = get_mouse_dz(analogRead(A1), dx_ofs, deadzone, dx_dead, speed);
+  char dy = get_mouse_dz(analogRead(A0), dy_ofs, deadzone, dy_dead, speed);
   
   if (print_debounce < millis()) {
-    print_debounce = millis() + 2000;
+    print_debounce = millis() + print_debounce_delay;
+    if (dx_dead) {Serial.print("D");} else{Serial.print("A");}
     Serial.print("dx: ");
-    Serial.print(analogRead(A0));
-    Serial.print(" -> ");
-    Serial.println(dx);
-    
-    Serial.print("dy: ");
     Serial.print(analogRead(A1));
     Serial.print(" -> ");
-    Serial.println(dy);
+    Serial.print(int(dx));
+
+    Serial.print(" || ");
+
+    if (dy_dead) {Serial.print("D");} else{Serial.print("A");}
+    Serial.print("dy: ");
+    Serial.print(analogRead(A0));
+    Serial.print(" -> ");
+    Serial.println(int(dy));
     
   }
 
   if (mouse_report_debounce < millis()) {
-    mouse_report_debounce = millis() + 100;
+    mouse_report_debounce = millis() + mouse_report_debounce_delay;
 
     if (scroll_mode)  {
       if (moveflag == 0) {
         Mouse.move(
-          dx * speed,
-          dy * speed
+          dx,
+          dy
         );
       }
       else {
         Mouse.move(
-          logspeed * signOf(dx) * log10(1 + abs(dx * logw)),
-          logspeed * signOf(dy) * log10(1+ abs(dy * logw))
+          logspeed * signOf(dx) * (exp(abs(float(dx) * logw / 100.0)) - 1.0 ),
+          logspeed * signOf(dy) * (exp(abs(float(dy) * logw / 100.0)) - 1.0 )
         );
+
       }
-      delay(100);
     }    
     else {
-      if (dy > 0) {
-        Mouse.move(0,0, -2.0);
-      }
-      else if (dy < 0) {
-        Mouse.move(0,0, 2.0);
-        }
-//        delay(100);
+      Mouse.move(0,0, signOf(dy) * 2);
+      delay(100);
     }
   }
 }
 
+
+char get_mouse_dz(int value, int offset, int deadzone, bool dz_dead, float speed) {
+  //Serial.print("read: ");
+  //Serial.println(value);
+  float normalized = (float)(value - offset);
+  //Serial.print("minus offset: ");
+  //Serial.println("normalized");
+  
+  if (abs(normalized ) <= (float)deadzone ) {normalized = 0.0; dz_dead = true;}
+  normalized *= speed / 1024.0;
+ // Serial.print("time speed: ");
+  //Serial.println(normalized);
+  
+  int max_value = pow(2, sizeof(char) * 7);
+  //Serial.print("max value");
+  //Serial.println(max_value);
+  
+  if (normalized > max_value) { normalized =  max_value; }
+  if (normalized <  - max_value) { normalized = - max_value; }
+  //Serial.print("after clamping: ");
+  //Serial.println(normalized);
+
+  //Serial.print("after cast: ");
+  //Serial.println( (long)(char)normalized);
+  
+  return (char)normalized;
+}
+
+
+
 int signOf(int i) {
   if (i < 0) { return -1; }
+  return +1;
+}
+
+
+int signOf(float i) {
+  if (i < 0.0) { return -1; }
   return +1;
 }
