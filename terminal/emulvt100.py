@@ -59,11 +59,29 @@ class TerminalEmulator:
         self.port_menu['values'] = self.get_serial_ports()
         self.port_menu.pack(pady=5)
 
-        # Bouton de connexion/déconnexion
-        self.connect_button = tk.Button(root, text="Connect", command=self.connect_serial)
-        self.connect_button.pack(pady=5)
+        def callback():
+            # new entries appear at the beginning
+            ports = self.get_serial_ports()
+            result = []
 
+            for k in ports:
+                if not k in list(self.port_menu['values']):                    
+                    result.insert(0, k)
+                else:
+                    result.append(k)
+            self.port_menu['values'] = result
+        
+        self.button_frame = tk.Frame(root)
+        self.button_frame.pack(pady=5)
+        # Bouton pour rafraichir les connections
+        self.refresh_button = tk.Button(self.button_frame, text="Refresh", command=callback)
+        self.refresh_button.grid(column=1, row=1, padx=5)
         # Chargement des paramètres de configuration
+
+        # Bouton de connexion/déconnexion
+        self.connect_button = tk.Button(self.button_frame, text="Connect", command=self.connect_serial)
+        self.connect_button.grid(column=2, row=1, padx=5)
+
         init_serial_config()
         self.config = load_config()
         self.serial_conn = None
