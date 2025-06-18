@@ -79,7 +79,7 @@ int all_signals[] = { A2, A3, A4, A5 }; // used by the switches
 
 int button_lengths = 2;
 int button_signals[] = {A2, A3};
-bool button_pressed[] = {true, true};
+bool button_pressed[] = {false, false};
 int buttons_id[] = {MOUSE_LEFT, MOUSE_RIGHT};
 
 int switches_lengths = 2;
@@ -105,7 +105,6 @@ unsigned long mouse_report_debounce_delay = 20;
 unsigned long scroll_report_debounce = 0;
 unsigned long buttons_debounce[] = {0, 0, 0, 0}; // used to store the debounce timer
 const unsigned long debounce_delay = 300; // in milliseconds
-
 
 void setup() {
   load_values_from_EEPROM();
