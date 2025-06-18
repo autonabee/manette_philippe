@@ -194,7 +194,7 @@ void loop() {
   char dx = get_mouse_dz(1024 - analogRead(A1), dx_ofs, deadzone, dx_dead, speed);
   char dy = get_mouse_dz(1024 - analogRead(A0), dy_ofs, deadzone, dy_dead, speed);
   
-  if (print_debounce < millis()) {
+  if (print_debounce < millis() and false) {
     print_debounce = millis() + print_debounce_delay;
     if (dx_dead) {Serial.print("D");} else{Serial.print("A");}
     Serial.print("dx: ");
@@ -241,7 +241,7 @@ void loop() {
       char dz = get_mouse_dz(1024 -analogRead(A0), 0, deadzone, true, scroll_speed);
       float scroll_delay = min_delay_scroll + scroll_off/1.0+dz;
       scroll_report_debounce = millis() + scroll_delay;
-      Mouse.move(0,0, signOf(dy));
+      Mouse.move(0,0, signOf(dz));
     }
   }
 }
