@@ -188,8 +188,11 @@ void loop() {
 
   bool dx_dead = false;
   bool dy_dead = false;
-  char dx = get_mouse_dz(analogRead(A1), dx_ofs, deadzone, dx_dead, speed);
-  char dy = get_mouse_dz(analogRead(A0), dy_ofs, deadzone, dy_dead, speed);
+  // 0 -> 1054
+  // 1054 -> 0
+  // 1024 - v
+  char dx = get_mouse_dz(1024 - analogRead(A1), dx_ofs, deadzone, dx_dead, speed);
+  char dy = get_mouse_dz(1024 - analogRead(A0), dy_ofs, deadzone, dy_dead, speed);
   
   if (print_debounce < millis()) {
     print_debounce = millis() + print_debounce_delay;
@@ -235,7 +238,7 @@ void loop() {
     if (scroll_report_debounce < millis()) {
       scroll_report_debounce = millis() + 100;
       
-      char dz = get_mouse_dz(analogRead(A0), 0, deadzone, true, scroll_speed);
+      char dz = get_mouse_dz(1024 -analogRead(A0), 0, deadzone, true, scroll_speed);
       float scroll_delay = min_delay_scroll + scroll_off/1.0+dz;
       scroll_report_debounce = millis() + scroll_delay;
       Mouse.move(0,0, signOf(dy));
