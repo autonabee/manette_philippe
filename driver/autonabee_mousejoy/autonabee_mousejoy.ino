@@ -10,8 +10,8 @@ two buttons will toggle shift mode (left key pressed) or scroll mode (moving the
 The behaviour can be customized by sending commands to the board via tty or with the helper python script (TODO).
 EXPECTED COMMANDS:
 - `CALIBRATE` to send while leaving the joystick untouched while the systems calibrate.
-- `DEFAULTS`
-- `HELP`
+- `DEFAULTS`, restore all variables to their default values.
+- `PRINT`, prints all variables and their values.
 - `SET <X> <Y>` where Y is an integer or a float and X must be one of
   - int DEADZONE: a value between 0 and 512, all joystick input under this range will be ignored.
   - int MOVEFLAG: 0 indicates to move the mouse using a linear scale, 1 in a logarithmic scale.
@@ -113,14 +113,6 @@ void setup() {
     if (millis() > max_delay) {break;}
   }
 
-  print_tick("X offset", String(dx_ofs));
-  print_tick("Y offset", String(dy_ofs));
-  print_tick("Speed", String(speed));
-  print_tick("Deadzone", String(deadzone));
-  print_tick("Logw", String(logw));
-  print_tick("Logspeed", String(logspeed));
-  print_tick("MoveFlag", String(moveflag));
-
   // we init all the inputs.
   for (int i = 0; i < all_signals_length; i++) {
     pinMode(all_signals[i], INPUT_PULLUP); // pas besoin de resistances pour les switchs.
@@ -130,7 +122,7 @@ void setup() {
   
   Serial.begin(9600);
   Serial.println("Arduino joy mouse starts!");
-
+  print_eeprom_var();
   // Sends a clean report to the host.
   Mouse.begin();
   Keyboard.begin();
@@ -293,11 +285,21 @@ void handle_serial_communication() {
     String command = Serial.readString();
     
     if (command.indexOf(CALIBRATE) != -1) {
-        calibrate();
+      calibrate();
+      continue;
     }
+    
+    if (command.indexOf("PRINT") != -1) {
+        print_eeprom_var();
+        continue;
+    }
+    
+    
     else if (command.indexOf("DEFAULTS") != -1) {
       write_defaults_to_EEPROM();
     }
+
+    
     else {
       int space = command.indexOf(" ");
       if (space == -1) {
@@ -427,6 +429,17 @@ void write_defaults_to_EEPROM() {
   load_values_from_EEPROM();
   Serial.println("RESET TO DEFAULTS SETTINGS");
 }
+
+void print_eeprom_var() {
+  print_tick("X offset", String(dx_ofs));
+  print_tick("Y offset", String(dy_ofs));
+  print_tick("SPEED", String(speed));
+  print_tick("DEADZONE", String(deadzone));
+  print_tick("LOGW", String(logw));
+  print_tick("LOGSPEED", String(logspeed));
+  print_tick("MOVEFLAG", String(moveflag));
+}
+
 
 void print_tick(String name, String s) {
   Serial.print(name);
